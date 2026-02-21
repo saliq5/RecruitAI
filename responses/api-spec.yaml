@@ -1,0 +1,617 @@
+openapi: 3.0.3
+info:
+  title: RecruitAI Backend API
+  version: 0.1.0
+  description: >
+    MVP API for end-to-end Recruiting AI workflow (Rounds R1–R3) with JWT auth.
+    Tech: Java/Spring Boot backend, PostgreSQL, Elasticsearch, Elastic Agent Builder.
+servers:
+  - url: http://localhost:8080/api
+    description: Local dev
+tags:
+  - name: Auth
+  - name: Jobs
+  - name: Applications
+  - name: Screening (R1)
+  - name: Assessment (R2)
+  - name: Interview (R3)
+  - name: Scheduling
+  - name: Audit
+security:
+  - bearerAuth: []
+paths:
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Login with username/password
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Tokens issued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginResponse"
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /auth/refresh:
+    post:
+      tags: [Auth]
+      summary: Refresh access token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RefreshRequest"
+      responses:
+        "200":
+          description: New access token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RefreshResponse"
+        "401":
+          description: Invalid refresh token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /jobs:
+    get:
+      tags: [Jobs]
+      summary: List jobs
+      responses:
+        "200":
+          description: Job list
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/JobSummary" }
+    post:
+      tags: [Jobs]
+      summary: Create or update a job (RECRUITER/ADMIN)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/JobCreate" }
+      responses:
+        "201":
+          description: Job created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Job" }
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /jobs/{id}:
+    get:
+      tags: [Jobs]
+      summary: Get job by id
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Job
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Job" }
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /applications:
+    post:
+      tags: [Applications]
+      summary: Submit an application with resume upload (CANDIDATE)
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [jobId, resumeFile]
+              properties:
+                jobId:
+                  type: string
+                  format: uuid
+                resumeFile:
+                  type: string
+                  format: binary
+      responses:
+        "201":
+          description: Application created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApplicationCreated"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /applications/{id}:
+    get:
+      tags: [Applications]
+      summary: Get application status
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Application
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Application"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /screening/{applicationId}/run:
+    post:
+      tags: ["Screening (R1)"]
+      summary: Run Round 1 screening (keyword + agent resume eval)
+      parameters:
+        - in: path
+          name: applicationId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: R1 results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScreeningResult"
+        "409":
+          description: Attempt locked / already taken
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /screening/{applicationId}:
+    get:
+      tags: ["Screening (R1)"]
+      summary: Get latest R1 screening result
+      parameters:
+        - in: path
+          name: applicationId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: R1 latest results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScreeningResult"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /assessments/{applicationId}/generate:
+    post:
+      tags: ["Assessment (R2)"]
+      summary: Generate 30 MCQs for the application (owner/recruiter)
+      parameters:
+        - in: path
+          name: applicationId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "201":
+          description: Assessment generated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AssessmentGenerated"
+
+  /assessments/{assessmentId}:
+    get:
+      tags: ["Assessment (R2)"]
+      summary: Get assessment questions/status
+      parameters:
+        - in: path
+          name: assessmentId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Assessment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Assessment"
+
+  /assessments/{assessmentId}/answers:
+    post:
+      tags: ["Assessment (R2)"]
+      summary: Submit answers for scoring
+      parameters:
+        - in: path
+          name: assessmentId
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AssessmentAnswersRequest" }
+      responses:
+        "200":
+          description: Scoring result
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssessmentAnswersResponse" }
+        "409":
+          description: Attempt locked / already completed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /interview/{applicationId}/next-question:
+    get:
+      tags: ["Interview (R3)"]
+      summary: Fetch next interview question
+      parameters:
+        - in: path
+          name: applicationId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Next question
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InterviewQuestion" }
+
+  /interview/{applicationId}/answer:
+    post:
+      tags: ["Interview (R3)"]
+      summary: Submit interview answer (text or audio reference)
+      parameters:
+        - in: path
+          name: applicationId
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/InterviewAnswerRequest" }
+      responses:
+        "202":
+          description: Accepted
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Ack" }
+
+  /interview/{applicationId}/finalize:
+    post:
+      tags: ["Interview (R3)"]
+      summary: Finalize interview and compute final score/decision
+      parameters:
+        - in: path
+          name: applicationId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Final interview result
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InterviewFinalizeResponse" }
+
+  /interviewers/search:
+    get:
+      tags: [Scheduling]
+      summary: Search interviewer profiles by query (recruiter/admin)
+      parameters:
+        - in: query
+          name: q
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Interviewer search hits
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/InterviewerProfileHit" }
+
+  /schedule:
+    post:
+      tags: [Scheduling]
+      summary: Create a schedule for selected interviewer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ScheduleRequest" }
+      responses:
+        "201":
+          description: Schedule created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ScheduleResponse" }
+
+  /audits:
+    get:
+      tags: [Audit]
+      summary: List audit logs (ADMIN)
+      parameters:
+        - in: query
+          name: applicationId
+          required: false
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Audit entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AuditLog" }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        message: { type: string }
+        code: { type: string }
+        details: {}
+
+    LoginRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username: { type: string }
+        password: { type: string, format: password }
+
+    LoginResponse:
+      type: object
+      properties:
+        accessToken: { type: string }
+        refreshToken: { type: string }
+        role: { $ref: "#/components/schemas/UserRole" }
+
+    RefreshRequest:
+      type: object
+      required: [refreshToken]
+      properties:
+        refreshToken: { type: string }
+
+    RefreshResponse:
+      type: object
+      properties:
+        accessToken: { type: string }
+
+    UserRole:
+      type: string
+      enum: [CANDIDATE, RECRUITER, ADMIN]
+
+    JobCreate:
+      type: object
+      required: [title, description, skills, location]
+      properties:
+        title: { type: string }
+        description: { type: string }
+        skills:
+          type: array
+          items: { type: string }
+        location: { type: string }
+
+    JobSummary:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string }
+        location: { type: string }
+        skills:
+          type: array
+          items: { type: string }
+        jd_id: { type: string }
+
+    Job:
+      allOf:
+        - $ref: "#/components/schemas/JobSummary"
+        - type: object
+          properties:
+            description: { type: string }
+
+    ApplicationCreated:
+      type: object
+      properties:
+        applicationId: { type: string, format: uuid }
+        status:
+          type: string
+          enum:
+            [
+              SUBMITTED,
+              R1_PASSED,
+              R1_FAILED,
+              R2_PASSED,
+              R2_FAILED,
+              R3_PASSED,
+              R3_FAILED,
+              SCHEDULED,
+              REJECTED,
+              SELECTED,
+            ]
+
+    Application:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        userId: { type: string, format: uuid }
+        jobId: { type: string, format: uuid }
+        status:
+          type: string
+          enum:
+            [
+              SUBMITTED,
+              R1_PASSED,
+              R1_FAILED,
+              R2_PASSED,
+              R2_FAILED,
+              R3_PASSED,
+              R3_FAILED,
+              SCHEDULED,
+              REJECTED,
+              SELECTED,
+            ]
+        createdAt: { type: string, format: date-time }
+
+    ScreeningResult:
+      type: object
+      properties:
+        kwScore: { type: number, format: float, minimum: 0, maximum: 1 }
+        resumeScore: { type: number, format: float, minimum: 0, maximum: 1 }
+        finalScore: { type: number, format: float, minimum: 0, maximum: 1 }
+        passed: { type: boolean }
+        threshold: { type: number, format: float, example: 0.8 }
+
+    AssessmentGenerated:
+      type: object
+      properties:
+        assessmentId: { type: string, format: uuid }
+        questions:
+          type: array
+          minItems: 30
+          maxItems: 30
+          items: { $ref: "#/components/schemas/AssessmentQuestion" }
+
+    Assessment:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        applicationId: { type: string, format: uuid }
+        questions:
+          type: array
+          items: { $ref: "#/components/schemas/AssessmentQuestion" }
+        status:
+          type: string
+          enum: [GENERATED, COMPLETED]
+
+    AssessmentQuestion:
+      type: object
+      required: [id, text, choices]
+      properties:
+        id: { type: string }
+        text: { type: string }
+        choices:
+          type: array
+          minItems: 4
+          maxItems: 4
+          items: { type: string }
+
+    AssessmentAnswersRequest:
+      type: object
+      properties:
+        answers:
+          type: array
+          items:
+            type: object
+            required: [questionId, choice]
+            properties:
+              questionId: { type: string }
+              choice: { type: string, enum: [A, B, C, D] }
+
+    AssessmentAnswersResponse:
+      type: object
+      properties:
+        score: { type: number, format: float, minimum: 0, maximum: 1 }
+        passed: { type: boolean }
+        threshold: { type: number, format: float, example: 0.85 }
+
+    InterviewQuestion:
+      type: object
+      properties:
+        questionId: { type: string, format: uuid }
+        text: { type: string }
+        type: { type: string, enum: [TECH, HR] }
+
+    InterviewAnswerRequest:
+      type: object
+      properties:
+        questionId: { type: string, format: uuid }
+        text: { type: string, nullable: true }
+        audioBlobId: { type: string, nullable: true }
+
+    InterviewFinalizeResponse:
+      type: object
+      properties:
+        interviewScore: { type: number, format: float, minimum: 0, maximum: 1 }
+        decision: { type: string, enum: [SELECT, REJECT] }
+
+    InterviewerProfileHit:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        skills:
+          type: array
+          items: { type: string }
+        score: { type: number, format: float }
+
+    ScheduleRequest:
+      type: object
+      required: [applicationId, interviewerId, slot]
+      properties:
+        applicationId: { type: string, format: uuid }
+        interviewerId: { type: string, format: uuid }
+        slot: { type: string, format: date-time }
+
+    ScheduleResponse:
+      type: object
+      properties:
+        scheduleId: { type: string, format: uuid }
+        status: { type: string }
+
+    AuditLog:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        actorUserId: { type: string, format: uuid, nullable: true }
+        action: { type: string }
+        entity: { type: string }
+        entityId: { type: string }
+        createdAt: { type: string, format: date-time }

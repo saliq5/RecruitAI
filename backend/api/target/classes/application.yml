@@ -1,0 +1,54 @@
+spring:
+  application:
+    name: recruitai-api
+  datasource:
+    url: jdbc:postgresql://localhost:5432/recruitai
+    username: recruitai
+    password: recruitai
+  jpa:
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        jdbc:
+          lob:
+            non_contextual_creation: true
+        format_sql: true
+    open-in-view: false
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+
+server:
+  port: 8080
+
+logging:
+  level:
+    root: INFO
+    org.springframework.security: INFO
+    com.recruitai.api: DEBUG
+
+app:
+  security:
+    jwt:
+      # For local dev only; override via ENV JWT_SECRET in production
+      secret: ${JWT_SECRET:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef}
+      issuer: recruitai
+      access-token-ttl-minutes: 15
+      refresh-token-ttl-days: 7
+  cors:
+    allowed-origins:
+      - http://localhost:5173
+      - http://127.0.0.1:5173
+    allowed-methods:
+      - GET
+      - POST
+      - PUT
+      - DELETE
+      - OPTIONS
+    allowed-headers:
+      - Authorization
+      - Content-Type
+      - Accept
+      - X-Requested-With
+    allow-credentials: true

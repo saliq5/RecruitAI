@@ -1,0 +1,248 @@
+{
+    "kb_docs": {
+        "settings": {
+            "number_of_shards": 1,
+            "number_of_replicas": 0,
+            "analysis": {
+                "analyzer": {
+                    "default": {
+                        "type": "standard"
+                    },
+                    "shingles_analyzer": {
+                        "type": "custom",
+                        "tokenizer": "standard",
+                        "filter": [
+                            "lowercase",
+                            "shingle"
+                        ]
+                    }
+                }
+            }
+        },
+        "mappings": {
+            "dynamic": "strict",
+            "properties": {
+                "id": {
+                    "type": "keyword"
+                },
+                "title": {
+                    "type": "text"
+                },
+                "source": {
+                    "type": "keyword"
+                },
+                "content": {
+                    "type": "text"
+                },
+                "tags": {
+                    "type": "keyword"
+                },
+                "updated_at": {
+                    "type": "date"
+                },
+                "embedding": {
+                    "type": "dense_vector",
+                    "dims": 768,
+                    "index": true,
+                    "similarity": "cosine"
+                }
+            }
+        }
+    },
+    "job_descriptions": {
+        "settings": {
+            "number_of_shards": 1,
+            "number_of_replicas": 0
+        },
+        "mappings": {
+            "dynamic": "strict",
+            "properties": {
+                "id": {
+                    "type": "keyword"
+                },
+                "job_id": {
+                    "type": "keyword"
+                },
+                "title": {
+                    "type": "text"
+                },
+                "description": {
+                    "type": "text"
+                },
+                "skills": {
+                    "type": "keyword"
+                },
+                "embedding": {
+                    "type": "dense_vector",
+                    "dims": 768,
+                    "index": true,
+                    "similarity": "cosine"
+                }
+            }
+        }
+    },
+    "resumes": {
+        "settings": {
+            "number_of_shards": 1,
+            "number_of_replicas": 0
+        },
+        "mappings": {
+            "dynamic": "strict",
+            "properties": {
+                "id": {
+                    "type": "keyword"
+                },
+                "application_id": {
+                    "type": "keyword"
+                },
+                "text_content": {
+                    "type": "text"
+                },
+                "sections": {
+                    "type": "object",
+                    "properties": {
+                        "summary": {
+                            "type": "text"
+                        },
+                        "experience": {
+                            "type": "text"
+                        },
+                        "education": {
+                            "type": "text"
+                        },
+                        "skills": {
+                            "type": "text"
+                        }
+                    }
+                },
+                "skills": {
+                    "type": "keyword"
+                },
+                "embedding": {
+                    "type": "dense_vector",
+                    "dims": 768,
+                    "index": true,
+                    "similarity": "cosine"
+                }
+            }
+        }
+    },
+    "interviewer_profiles": {
+        "settings": {
+            "number_of_shards": 1,
+            "number_of_replicas": 0
+        },
+        "mappings": {
+            "dynamic": "strict",
+            "properties": {
+                "id": {
+                    "type": "keyword"
+                },
+                "profile_id": {
+                    "type": "keyword"
+                },
+                "name": {
+                    "type": "text"
+                },
+                "skills": {
+                    "type": "keyword"
+                },
+                "past_interviews": {
+                    "type": "integer"
+                },
+                "embedding": {
+                    "type": "dense_vector",
+                    "dims": 768,
+                    "index": true,
+                    "similarity": "cosine"
+                }
+            }
+        }
+    },
+    "_notes": "This file aggregates per-index settings/mappings for convenience. Apply each block to its respective index via separate HTTP requests.",
+    "examples": {
+        "kb_docs_bm25": {
+            "index": "kb_docs",
+            "body": {
+                "query": {
+                    "multi_match": {
+                        "query": "kubernetes daemonset rollout",
+                        "fields": [
+                            "content^2",
+                            "title"
+                        ]
+                    }
+                }
+            }
+        },
+        "kb_docs_vector": {
+            "index": "kb_docs",
+            "body": {
+                "knn": {
+                    "field": "embedding",
+                    "query_vector": [
+                        0.01,
+                        0.02,
+                        0.03
+                    ],
+                    "k": 50,
+                    "num_candidates": 200
+                }
+            }
+        },
+        "kb_docs_hybrid": {
+            "index": "kb_docs",
+            "body": {
+                "query": {
+                    "bool": {
+                        "must": [
+                            {
+                                "multi_match": {
+                                    "query": "docker networking",
+                                    "fields": [
+                                        "content",
+                                        "title"
+                                    ]
+                                }
+                            }
+                        ]
+                    }
+                },
+                "knn": {
+                    "field": "embedding",
+                    "query_vector": [
+                        0.01,
+                        0.02,
+                        0.03
+                    ],
+                    "k": 50,
+                    "num_candidates": 200
+                }
+            }
+        },
+        "interviewer_search_hybrid": {
+            "index": "interviewer_profiles",
+            "body": {
+                "query": {
+                    "multi_match": {
+                        "query": "kubernetes helm devops",
+                        "fields": [
+                            "name",
+                            "skills"
+                        ]
+                    }
+                },
+                "knn": {
+                    "field": "embedding",
+                    "query_vector": [
+                        0.01,
+                        0.02,
+                        0.03
+                    ],
+                    "k": 20,
+                    "num_candidates": 100
+                }
+            }
+        }
+    }
+}

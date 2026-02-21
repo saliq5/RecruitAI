@@ -1,0 +1,81 @@
+version: "3.8"
+
+# RecruitAI MVP - Local Dev Stack
+# Services: PostgreSQL, Elasticsearch, Kibana, Backend (Spring Boot), Frontend (React)
+# Usage:
+#   1) cp .env.example .env   # then edit values if needed
+#   2) docker compose up -d
+#   3) Visit: ES http://localhost:9200, Kibana http://localhost:5601, Backend http://localhost:8080, Frontend http://localhost:3000
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: recruitai-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-recruitai}
+      POSTGRES_USER: ${POSTGRES_USER:-recruitai}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-recruitai}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      # Initializes schema on first run
+      - ./sql-schema.sql:/docker-entrypoint-initdb.d/00-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.13.0
+    container_name: recruitai-elasticsearch
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false" # local only; keep security enabled in cloud
+      ES_JAVA_OPTS: ${ES_JAVA_OPTS:--Xms1g -Xmx1g}
+    ports:
+      - "9200:9200"
+    volumes:
+      - es-data:/usr/share/elasticsearch/data
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.13.0
+    container_name: recruitai-kibana
+    environment:
+      ELASTICSEARCH_HOSTS: http://elasticsearch:9200
+    ports:
+      - "5601:5601"
+    depends_on:
+      - elasticsearch
+
+  backend:
+    image: ${BACKEND_IMAGE:-ghcr.io/example/recruitai-backend:dev}
+    container_name: recruitai-backend
+    environment:
+      DB_URL: ${DB_URL:-jdbc:postgresql://postgres:5432/${POSTGRES_DB:-recruitai}}
+      DB_USER: ${DB_USER:-recruitai}
+      DB_PASSWORD: ${DB_PASSWORD:-recruitai}
+      ELASTIC_URL: ${ELASTIC_URL:-http://elasticsearch:9200}
+      JWT_SECRET: ${JWT_SECRET:-dev-secret-change}
+      LLM_PROVIDER: ${LLM_PROVIDER:-local}
+      WHISPER_PATH: ${WHISPER_PATH:-/usr/local/bin/whisper}
+    ports:
+      - "8080:8080"
+    depends_on:
+      - postgres
+      - elasticsearch
+
+  frontend:
+    image: ${FRONTEND_IMAGE:-ghcr.io/example/recruitai-frontend:dev}
+    container_name: recruitai-frontend
+    environment:
+      VITE_API_BASE: ${VITE_API_BASE:-http://localhost:8080/api}
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+
+volumes:
+  postgres-data:
+  es-data:

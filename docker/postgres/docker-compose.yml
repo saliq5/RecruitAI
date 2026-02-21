@@ -1,0 +1,19 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: recruitai-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: recruitai
+      POSTGRES_USER: recruitai
+      POSTGRES_PASSWORD: recruitai
+    ports:
+      - "5432:5432"
+    volumes:
+      - recruitai_pgdata:/var/lib/postgresql/data
+      - ./initdb.d:/docker-entrypoint-initdb.d:ro
+
+volumes:
+  recruitai_pgdata:

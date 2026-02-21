@@ -1,0 +1,108 @@
+flowchart LR
+  subgraph UI[React Frontend]
+    ULogin[Login/Register]
+    UJobs[View Jobs]
+    UApply[Apply & Upload Resume]
+    UAssess[Online Assessment]
+    UInterview[AI Virtual Interview]
+    USchedule[Scheduling View]
+    UStatus[Application Status]
+  end
+
+  subgraph BE[Spring Boot Backend]
+    A[AuthController]
+    J[JobsController]
+    AP[ApplicationsController]
+    R1[ScreeningController ]
+    R2[AssessmentController ]
+    R3[InterviewController]
+    S[SchedulingController]
+    AU[AuditService]
+    KV[KeywordService]
+    SC[ScoringService]
+    ESVC[ElasticService]
+    AS[AgentOrchestrationService]
+    STT[TranscriptionService]
+  end
+
+  subgraph DB[PostgreSQL]
+    TUsers[(users)]
+    TJobs[(jobs)]
+    TApps[(applications)]
+    TAttempts[(attempts)]
+    TScores[(round_scores)]
+    TAssess[(assessments)]
+    TAns[(answers)]
+    TQ[(interview_questions)]
+    TTx[(transcripts)]
+    TProf[(interviewer_profiles)]
+    TSch[(schedules)]
+    TAudit[(audit_logs)]
+  end
+
+  subgraph EStack[Elasticsearch + Kibana]
+    KB[kb_docs index]
+    JD[job_descriptions index]
+    RS[resumes index]
+    IP[interviewer_profiles index]
+  end
+
+  subgraph Agents[Elastic Agent Builder Orchestration]
+    PS[Problem Setter Agent]
+    QS[Question Setter Agent]
+    CR[Critic Agent]
+    EV[Evaluator Agent]
+  end
+
+  subgraph LLMs[LLMs/Tools]
+    L1[Local/Hosted LLM]
+    W[Whisper STT]
+  end
+
+  ULogin --> A
+  UJobs --> J
+  UApply --> AP
+  UAssess --> R2
+  UInterview --> R3
+  USchedule --> S
+  UStatus --> AP
+
+  A --> TUsers
+  J --> TJobs
+  AP --> TApps
+  AP -->|store attempt| TAttempts
+  AP -->|resume meta| TApps
+  AP -->|audit| TAudit
+
+  R1 -->|keyword match| KV
+  R1 -->|agent resume eval| AS
+  KV -->|store kw score| TScores
+  AS -->|resume eval score| TScores
+  R1 -->|final weighted score| SC
+  SC -->|gate >=80| R2
+
+  R2 -->|extract top skills| AS
+  AS -->|retrieve KB| ESVC
+  ESVC --> KB
+  AS -->|generate 30 MCQs| PS
+  PS --> R2
+  R2 -->|store assessment & questions| TAssess
+  UAssess -->|submit answers| R2
+  R2 -->|score| SC
+  SC -->|gate >=85| R3
+  R2 -->|audit| TAudit
+
+  R3 -->|question loop| QS --> CR --> QS
+  R3 -->|serve next question| UInterview
+  UInterview -->|audio/text| R3
+  R3 --> STT --> W
+  STT -->|transcript| TTx
+  R3 -->|evaluate answers| EV
+  EV --> CR --> EV
+  EV -->|final interview score| TScores
+  R3 -->|audit| TAudit
+
+  S -->|semantic search| ESVC
+  ESVC --> JD & RS & IP
+  S -->|create schedule| TSch
+  S -->|audit| TAudit
